@@ -40,6 +40,7 @@
 #include <stdint.h>
 #include <zlib.h>
 #include <fmt/printf.h>
+#include <MidiFile.h>
 #include <stdexcept>
 
 #ifdef _WIN32
@@ -1752,6 +1753,16 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         "Save Instrument",
         {"DefleMask preset", "*.dmp"},
         workingDirIns,
+        dpiScale
+      );
+      break;
+    case GUI_FILE_MIDI_IMPORT:
+      if (!dirExists(workingDirMidi)) workingDirMidi=getHomeDir();
+      hasOpened=fileDialog->openLoad(
+        "Import MIDI",
+        {"MIDI sequence", "*.mid *.midi *.smf"},
+        "MIDI sequence{.mid,.midi,.smf}",
+        workingDirMidi,
         dpiScale
       );
       break;
@@ -4118,9 +4129,47 @@ bool FurnaceGUI::loop() {
           for (int i=0; i<e->song.systemLen; i++) {
             if ((e->song.system[i]==DIV_SYSTEM_VERA) || (e->song.system[i]==DIV_SYSTEM_YM2151)) numZSMCompat++;
           }
-          if (numZSMCompat>0) {
-            if (ImGui::BeginMenu("export ZSM...")) {
-              drawExportZSM();
+          ImGui::Text("select the systems you wish to export,");
+          ImGui::Text("but only up to %d of each type.",(vgmExportVersion>=0x151)?2:1);
+          if (hasOneAtLeast) {
+            if (ImGui::MenuItem("click to export")) {
+              openFileDialog(GUI_FILE_EXPORT_VGM);
+            }
+          } else {
+            ImGui::Text("nothing to export");
+          }
+          ImGui::EndMenu();
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("import midi to pattern...",BIND_FOR(GUI_ACTION_MIDI_IMPORT))) {
+          openFileDialog(GUI_FILE_MIDI_IMPORT);
+          midiDialogOpen=true;
+        }
+        ImGui::Separator();
+        if (ImGui::BeginMenu("add system...")) {
+          for (int j=0; availableSystems[j]; j++) {
+            if (!settings.hiddenSystems && (availableSystems[j]==DIV_SYSTEM_YMU759 || availableSystems[j]==DIV_SYSTEM_DUMMY || availableSystems[j]==DIV_SYSTEM_SOUND_UNIT)) continue;
+            sysAddOption((DivSystem)availableSystems[j]);
+          }
+          ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("configure system...")) {
+          for (int i=0; i<e->song.systemLen; i++) {
+            if (ImGui::TreeNode(fmt::sprintf("%d. %s##_SYSP%d",i+1,getSystemName(e->song.system[i]),i).c_str())) {
+              drawSysConf(i,e->song.system[i],e->song.systemFlags[i],true);
+              ImGui::TreePop();
+            }
+          }
+          ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("change system...")) {
+          ImGui::Checkbox("Preserve channel positions",&preserveChanPos);
+          for (int i=0; i<e->song.systemLen; i++) {
+            if (ImGui::BeginMenu(fmt::sprintf("%d. %s##_SYSC%d",i+1,getSystemName(e->song.system[i]),i).c_str())) {
+              for (int j=0; availableSystems[j]; j++) {
+                if (!settings.hiddenSystems && (availableSystems[j]==DIV_SYSTEM_YMU759 || availableSystems[j]==DIV_SYSTEM_DUMMY || availableSystems[j]==DIV_SYSTEM_SOUND_UNIT)) continue;
+                sysChangeOption(i,(DivSystem)availableSystems[j]);
+              }
               ImGui::EndMenu();
             }
           }
@@ -4603,6 +4652,7 @@ bool FurnaceGUI::loop() {
       MEASURE(insList,drawInsList());
       MEASURE(insEdit,drawInsEdit());
       MEASURE(mixer,drawMixer());
+      MEASURE(midiImport, drawMidiDialog());
 
       MEASURE(readOsc,readOsc());
 
@@ -4712,6 +4762,9 @@ bool FurnaceGUI::loop() {
         case GUI_FILE_INS_SAVE:
         case GUI_FILE_INS_SAVE_DMP:
           workingDirIns=fileDialog->getPath()+DIR_SEPARATOR_STR;
+          break;
+        case GUI_FILE_MIDI_IMPORT:
+          workingDirMidi=fileDialog->getPath()+DIR_SEPARATOR_STR;
           break;
         case GUI_FILE_WAVE_OPEN:
         case GUI_FILE_WAVE_OPEN_REPLACE:
@@ -5163,6 +5216,10 @@ bool FurnaceGUI::loop() {
               }
               break;
             }
+            case GUI_FILE_MIDI_IMPORT:
+              if (!(e->loadMidiImportFile(copyOfName.c_str())))
+                showError("could not open MIDI file!");
+              break;
             case GUI_FILE_EXPORT_VGM: {
               SafeWriter* w=e->saveVGM(willExport,vgmExportLoop,vgmExportVersion,vgmExportPatternHints,vgmExportDirectStream,vgmExportTrailingTicks);
               if (w!=NULL) {
@@ -6392,6 +6449,7 @@ bool FurnaceGUI::init() {
   workingDir=e->getConfString("lastDir",homeDir);
   workingDirSong=e->getConfString("lastDirSong",workingDir);
   workingDirIns=e->getConfString("lastDirIns",workingDir);
+  workingDirMidi=e->getConfString("lastDirMidi",workingDir);
   workingDirWave=e->getConfString("lastDirWave",workingDir);
   workingDirSample=e->getConfString("lastDirSample",workingDir);
   workingDirAudioExport=e->getConfString("lastDirAudioExport",workingDir);
@@ -6450,6 +6508,8 @@ bool FurnaceGUI::init() {
   insListDir=e->getConfBool("insListDir",false);
   waveListDir=e->getConfBool("waveListDir",false);
   sampleListDir=e->getConfBool("sampleListDir",false);
+
+  midiDialogOpen=false;
 
   tempoView=e->getConfBool("tempoView",true);
   waveHex=e->getConfBool("waveHex",false);
@@ -6959,6 +7019,7 @@ void FurnaceGUI::commitState() {
   e->setConf("lastDir",workingDir);
   e->setConf("lastDirSong",workingDirSong);
   e->setConf("lastDirIns",workingDirIns);
+  e->setConf("lastDirMidi",workingDirMidi);
   e->setConf("lastDirWave",workingDirWave);
   e->setConf("lastDirSample",workingDirSample);
   e->setConf("lastDirAudioExport",workingDirAudioExport);
@@ -7010,6 +7071,8 @@ void FurnaceGUI::commitState() {
   e->setConf("insListDir",insListDir);
   e->setConf("waveListDir",waveListDir);
   e->setConf("sampleListDir",sampleListDir);
+
+  e->setConf("midiDialogOpen",midiDialogOpen);
 
   // commit last window size
   e->setConf("lastWindowWidth",scrConfW);
@@ -7343,6 +7406,7 @@ FurnaceGUI::FurnaceGUI():
   clockShowBeat(true),
   clockShowMetro(true),
   clockShowTime(true),
+  midiDialogOpen(false),
   selecting(false),
   selectingFull(false),
   dragging(false),

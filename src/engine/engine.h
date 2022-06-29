@@ -29,6 +29,7 @@
 #include "safeWriter.h"
 #include "cmdStream.h"
 #include "../audio/taAudio.h"
+#include <MidiFile.h>
 #include "blip_buf.h"
 #include <functional>
 #include <initializer_list>
@@ -495,6 +496,8 @@ class DivEngine {
   int reversePitchTable[4096];
   int pitchTable[4096];
   short effectSlotMap[4096];
+  smf::MidiFile midiImportFile;
+  char midiImportFilename[255];
   int midiBaseChan;
   bool midiPoly;
   size_t midiAgeCounter;
@@ -1189,6 +1192,15 @@ class DivEngine {
     // switch master
     bool switchMaster(bool full=false);
 
+    // given a filename, load the MIDI file for use in importing
+    bool loadMidiImportFile(const char* filename);
+
+    // get a pointer to the MIDI file to import from
+    smf::MidiFile* getMidiImportFile();
+
+    // get a pointer to the MIDI filename to import from
+    const char* getMidiImportFilename();
+
     // set MIDI base channel
     void setMidiBaseChan(int chan);
 
@@ -1376,6 +1388,8 @@ class DivEngine {
       memset(sysDefs,0,DIV_MAX_CHIP_DEFS*sizeof(void*));
       memset(walked,0,8192);
       memset(oscBuf,0,DIV_MAX_OUTPUTS*(sizeof(float*)));
+      memset(midiImportFilename,0,255*sizeof(char));
+      memset(sysDefs,0,256*sizeof(void*));
 
       for (int i=0; i<DIV_MAX_CHIP_DEFS; i++) {
         sysFileMapFur[i]=DIV_SYSTEM_NULL;

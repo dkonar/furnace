@@ -481,6 +481,7 @@ enum FurnaceGUISettingGroups: unsigned int {
   GUI_SETTINGS_EMULATION=512,
 
   GUI_SETTINGS_ALL=0xffffffff
+  GUI_WINDOW_MIDI_DIALOG,
 };
 
 enum FurnaceGUIFileDialogs {
@@ -493,6 +494,7 @@ enum FurnaceGUIFileDialogs {
   GUI_FILE_INS_OPEN_REPLACE,
   GUI_FILE_INS_SAVE,
   GUI_FILE_INS_SAVE_DMP,
+  GUI_FILE_MIDI_IMPORT,
   GUI_FILE_WAVE_OPEN,
   GUI_FILE_WAVE_OPEN_REPLACE,
   GUI_FILE_WAVE_SAVE,
@@ -575,6 +577,7 @@ enum FurnaceGUIActions {
   GUI_ACTION_SAVE,
   GUI_ACTION_SAVE_AS,
   GUI_ACTION_EXPORT,
+  GUI_ACTION_MIDI_IMPORT,
   GUI_ACTION_UNDO,
   GUI_ACTION_REDO,
   GUI_ACTION_PLAY_TOGGLE,
@@ -1434,7 +1437,7 @@ class FurnaceGUI {
   bool updateSampleTex;
 
   String workingDir, fileName, clipboard, warnString, errorString, lastError, curFileName, nextFile, sysSearchQuery, newSongQuery;
-  String workingDirSong, workingDirIns, workingDirWave, workingDirSample, workingDirAudioExport;
+  String workingDirSong, workingDirIns, workingDirMidi, workingDirWave, workingDirSample, workingDirAudioExport;
   String workingDirVGMExport, workingDirZSMExport, workingDirROMExport, workingDirFont, workingDirColors, workingDirKeybinds;
   String workingDirLayout, workingDirROM, workingDirTest;
   String mmlString[32];
@@ -1981,6 +1984,8 @@ class FurnaceGUI {
   bool clockShowReal, clockShowRow, clockShowBeat, clockShowMetro, clockShowTime;
   float clockMetroTick[16];
 
+  bool midiDialogOpen;
+
   SelectionPoint selStart, selEnd, cursor, cursorDrag, dragStart, dragEnd;
   bool selecting, selectingFull, dragging, curNibble, orderNibble, followOrders, followPattern, changeAllOrders, mobileUI;
   bool collapseWindow, demandScrollX, fancyPattern, firstFrame, tempoView, waveHex, waveSigned, waveGenVisible, lockLayout, editOptsVisible, latchNibble, nonLatchNibble;
@@ -2364,6 +2369,17 @@ class FurnaceGUI {
   void drawExportAmigaVal(bool onWindow=false);
   void drawExportText(bool onWindow=false);
   void drawExportCommand(bool onWindow=false);
+  // MIDI import dialog
+  int midiImportChannel = 0;
+  int midiImportTrack = 0;
+  int midiImportStartMeasure = 0;
+  int midiImportTargetChannel = 0;
+  int midiImportPattern = 0;
+  int midiImportSpeedMultiplier = 0;
+  bool midiImportEnableNoteOff = true;
+  bool midiImportEnableVel = true;
+  bool midiImportEnableCC = false;
+  
 
   void drawSSGEnv(unsigned char type, const ImVec2& size);
   void drawWaveform(unsigned char type, bool opz, const ImVec2& size);
@@ -2485,6 +2501,7 @@ class FurnaceGUI {
   void drawClock();
   void drawTutorial();
   void drawXYOsc();
+  void drawMidiDialog();
 
   void parseKeybinds();
   void promptKey(int which);
@@ -2605,6 +2622,8 @@ class FurnaceGUI {
 
   const char* getSystemName(DivSystem which);
   const char* getSystemPartNumber(DivSystem sys, DivConfig& flags);
+
+  void midiImport(int midiChannel, int midiTrack, int midiStartMeasure, int targetChannelIdx, int patternIdx, bool enableCC, bool enableVel, bool enableNoteOff);
 
   public:
     void editStr(String* which);
